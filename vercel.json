@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/v1/:path*",
-      "destination": "https://dv1txz8ckqtwo.cloudfront.net/:path*"
+      "destination": "http://a14a8e4572b5f47d9b9600952b0a473a-388350110.ap-south-1.elb.amazonaws.com/:path*"
     }
   ]
 }
