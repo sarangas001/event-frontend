@@ -5,8 +5,9 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { AppContext } from "@/context/AppContext";
 import { toast } from "sonner";
+import { Navigate } from "react-router-dom";
 
-type TabKey = "faculties" | "deans" | "venues" | "advisors" | "organizations" | "roles";
+type TabKey = "faculties" | "deans" | "venues" | "advisors" | "organizations" | "roles" | "registerPresident" | "createProject";
 
 type CatalogData = {
   faculties: any[];
@@ -29,10 +30,20 @@ const initialCatalog: CatalogData = {
 const AdminDashboard = () => {
   const context = useContext(AppContext);
   if (!context) return null;
-  const { backendUrl } = context;
+  const { backendUrl, userData } = context;
 
-  const [activeTab, setActiveTab] = useState<TabKey>("faculties");
+  const role = userData?.role || "";
+  const isWelfareOfficer = role === "welfareOfficer";
+  const isDean = role === "dean";
+  const isPresident = role === "president";
+
+  if (!isWelfareOfficer && !isDean && !isPresident) {
+    return <Navigate to="/" replace />;
+  }
+
+  const [activeTab, setActiveTab] = useState<TabKey>(isWelfareOfficer ? "faculties" : isDean ? "registerPresident" : "createProject");
   const [catalog, setCatalog] = useState<CatalogData>(initialCatalog);
+  const [availableOrganizations, setAvailableOrganizations] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [facultyForm, setFacultyForm] = useState({ facultyName: "", departments: "", deanId: "" });
@@ -61,15 +72,30 @@ const AdminDashboard = () => {
     password: "",
     role: "sportsDirector",
   });
+  const [presidentForm, setPresidentForm] = useState({
+    organizationId: "",
+    presidentName: "",
+    presidentEmail: "",
+    presidentPassword: "",
+  });
+  const [projectForm, setProjectForm] = useState({
+    organizationId: "",
+    projectName: "",
+    description: "",
+  });
 
-  const tabs = [
-    { key: "faculties" as const, label: "Faculties", icon: School },
-    { key: "deans" as const, label: "Deans", icon: UserCog },
-    { key: "venues" as const, label: "Venues", icon: MapPin },
-    { key: "advisors" as const, label: "Advisors", icon: UsersRound },
-    { key: "organizations" as const, label: "Organizations", icon: UsersRound },
-    { key: "roles" as const, label: "Other Roles", icon: ShieldCheck },
-  ];
+  const tabs = isWelfareOfficer
+    ? [
+        { key: "faculties" as const, label: "Faculties", icon: School },
+        { key: "deans" as const, label: "Deans", icon: UserCog },
+        { key: "venues" as const, label: "Venues", icon: MapPin },
+        { key: "advisors" as const, label: "Advisors", icon: UsersRound },
+        { key: "organizations" as const, label: "Organizations", icon: UsersRound },
+        { key: "roles" as const, label: "Other Roles", icon: ShieldCheck },
+      ]
+    : isDean
+      ? [{ key: "registerPresident" as const, label: "Register President", icon: UserCog }]
+      : [{ key: "createProject" as const, label: "Create Project", icon: UsersRound }];
 
   const ownerCandidates = useMemo(() => {
     if (venueForm.ownerType === "Dean") return catalog.deans;
@@ -80,6 +106,10 @@ const AdminDashboard = () => {
   }, [catalog.adminRoles, catalog.deans, venueForm.ownerType]);
 
   const fetchCatalog = async () => {
+    if (!isWelfareOfficer) {
+      return;
+    }
+
     try {
       setLoading(true);
       axios.defaults.withCredentials = true;
@@ -96,9 +126,56 @@ const AdminDashboard = () => {
     }
   };
 
+  const fetchAvailableOrganizations = async () => {
+    if (!isDean && !isPresident) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      axios.defaults.withCredentials = true;
+      const { data } = await axios.get(`${backendUrl}/api/project/organizations`);
+
+      if (!data.success) {
+        toast.error(data.message || "Failed to load organizations");
+        return;
+      }
+
+      setAvailableOrganizations(data.message || []);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to load organizations");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    fetchCatalog();
-  }, []);
+    if (isWelfareOfficer) {
+      setActiveTab("faculties");
+      fetchCatalog();
+      return;
+    }
+
+    if (isDean) {
+      setActiveTab("registerPresident");
+      fetchAvailableOrganizations();
+      return;
+    }
+
+    if (isPresident) {
+      setActiveTab("createProject");
+      fetchAvailableOrganizations();
+    }
+  }, [isWelfareOfficer, isDean, isPresident]);
+
+  const refreshCurrentView = async () => {
+    if (isWelfareOfficer) {
+      await fetchCatalog();
+      return;
+    }
+
+    await fetchAvailableOrganizations();
+  };
 
   const submitAndRefresh = async (endpoint: string, body: Record<string, any>, onDone: () => void) => {
     try {
@@ -116,6 +193,50 @@ const AdminDashboard = () => {
     }
   };
 
+  const submitPresidentRegistration = async () => {
+    try {
+      axios.defaults.withCredentials = true;
+      const { data } = await axios.post(`${backendUrl}/api/admin/register-president`, presidentForm);
+
+      if (!data.success) {
+        toast.error(data.message || "Failed to register president");
+        return;
+      }
+
+      toast.success("President registered successfully");
+      setPresidentForm({
+        organizationId: "",
+        presidentName: "",
+        presidentEmail: "",
+        presidentPassword: "",
+      });
+      await fetchAvailableOrganizations();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to register president");
+    }
+  };
+
+  const submitPresidentProject = async () => {
+    try {
+      axios.defaults.withCredentials = true;
+      const { data } = await axios.post(`${backendUrl}/api/project/create`, projectForm);
+
+      if (!data.success) {
+        toast.error(data.message || "Failed to create project");
+        return;
+      }
+
+      toast.success("Project created successfully");
+      setProjectForm({
+        organizationId: "",
+        projectName: "",
+        description: "",
+      });
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to create project");
+    }
+  };
+
   const occupiedRoles = new Set(catalog.adminRoles.map((item) => item.adminProfile?.role));
 
   return (
@@ -129,11 +250,13 @@ const AdminDashboard = () => {
           <div className="mb-6 rounded-3xl border border-white/70 bg-white/80 p-5 shadow-[0_16px_60px_rgba(37,99,235,0.08)] backdrop-blur">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-600">Welfare Officer Panel</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-600">
+                  {isWelfareOfficer ? "Welfare Officer Panel" : isDean ? "Dean Panel" : "President Panel"}
+                </p>
                 <h1 className="mt-2 text-2xl font-semibold">University Administration Dashboard</h1>
               </div>
               <button
-                onClick={fetchCatalog}
+                onClick={refreshCurrentView}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium hover:bg-slate-50"
                 disabled={loading}
               >
@@ -163,7 +286,7 @@ const AdminDashboard = () => {
           </div>
 
           <section className="rounded-3xl border border-white/70 bg-white/90 p-6 shadow-[0_16px_60px_rgba(37,99,235,0.08)] backdrop-blur">
-            {activeTab === "faculties" && (
+            {activeTab === "faculties" && isWelfareOfficer && (
               <>
                 <h2 className="text-xl font-semibold">Faculty Management</h2>
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -183,7 +306,7 @@ const AdminDashboard = () => {
               </>
             )}
 
-            {activeTab === "deans" && (
+            {activeTab === "deans" && isWelfareOfficer && (
               <>
                 <h2 className="text-xl font-semibold">Dean Management</h2>
                 <div className="mt-4 grid gap-3 md:grid-cols-4">
@@ -204,7 +327,7 @@ const AdminDashboard = () => {
               </>
             )}
 
-            {activeTab === "venues" && (
+            {activeTab === "venues" && isWelfareOfficer && (
               <>
                 <h2 className="text-xl font-semibold">Venue Management</h2>
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -244,7 +367,7 @@ const AdminDashboard = () => {
               </>
             )}
 
-            {activeTab === "advisors" && (
+            {activeTab === "advisors" && isWelfareOfficer && (
               <>
                 <h2 className="text-xl font-semibold">Advisor Management</h2>
                 <div className="mt-4 grid gap-3 md:grid-cols-4">
@@ -263,7 +386,7 @@ const AdminDashboard = () => {
               </>
             )}
 
-            {activeTab === "organizations" && (
+            {activeTab === "organizations" && isWelfareOfficer && (
               <>
                 <h2 className="text-xl font-semibold">Organization Management</h2>
                 <div className="mt-4 flex gap-2">
@@ -321,7 +444,7 @@ const AdminDashboard = () => {
               </>
             )}
 
-            {activeTab === "roles" && (
+            {activeTab === "roles" && isWelfareOfficer && (
               <>
                 <h2 className="text-xl font-semibold">Other Roles Management</h2>
                 <p className="mt-1 text-sm text-slate-500">Only one user can exist per role: Sports Director, Chairman of Art, Proctor, Vice Chancellor.</p>
@@ -348,6 +471,95 @@ const AdminDashboard = () => {
                     ["Vice Chancellor", getRoleUser(catalog.adminRoles, "viceChancellor")?.fullName || "-", getRoleUser(catalog.adminRoles, "viceChancellor")?.email || "-", occupiedRoles.has("viceChancellor") ? "Assigned" : "Missing"],
                   ]}
                 />
+              </>
+            )}
+
+            {activeTab === "registerPresident" && isDean && (
+              <>
+                <h2 className="text-xl font-semibold">Register President</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Dean access is limited to president registration only.
+                </p>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <select
+                    className="rounded-xl border p-2.5"
+                    value={presidentForm.organizationId}
+                    onChange={(e) => setPresidentForm((v) => ({ ...v, organizationId: e.target.value }))}
+                  >
+                    <option value="">Select Organization</option>
+                    {availableOrganizations.map((org) => (
+                      <option key={org._id} value={org._id}>
+                        {org.organizationName}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="rounded-xl border p-2.5"
+                    placeholder="President Name"
+                    value={presidentForm.presidentName}
+                    onChange={(e) => setPresidentForm((v) => ({ ...v, presidentName: e.target.value }))}
+                  />
+                  <input
+                    className="rounded-xl border p-2.5"
+                    placeholder="President Email"
+                    value={presidentForm.presidentEmail}
+                    onChange={(e) => setPresidentForm((v) => ({ ...v, presidentEmail: e.target.value }))}
+                  />
+                  <input
+                    className="md:col-span-2 rounded-xl border p-2.5"
+                    placeholder="Temporary President Password"
+                    type="password"
+                    value={presidentForm.presidentPassword}
+                    onChange={(e) => setPresidentForm((v) => ({ ...v, presidentPassword: e.target.value }))}
+                  />
+                </div>
+                <button
+                  className="mt-3 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                  onClick={submitPresidentRegistration}
+                >
+                  <Plus className="h-4 w-4" /> Register President
+                </button>
+              </>
+            )}
+
+            {activeTab === "createProject" && isPresident && (
+              <>
+                <h2 className="text-xl font-semibold">Create Project</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  President access is limited to project creation only.
+                </p>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <select
+                    className="rounded-xl border p-2.5"
+                    value={projectForm.organizationId}
+                    onChange={(e) => setProjectForm((v) => ({ ...v, organizationId: e.target.value }))}
+                  >
+                    <option value="">Select Organization</option>
+                    {availableOrganizations.map((org) => (
+                      <option key={org._id} value={org._id}>
+                        {org.organizationName}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    className="rounded-xl border p-2.5"
+                    placeholder="Project Name"
+                    value={projectForm.projectName}
+                    onChange={(e) => setProjectForm((v) => ({ ...v, projectName: e.target.value }))}
+                  />
+                  <textarea
+                    className="md:col-span-2 min-h-[110px] rounded-xl border p-2.5"
+                    placeholder="Project Description"
+                    value={projectForm.description}
+                    onChange={(e) => setProjectForm((v) => ({ ...v, description: e.target.value }))}
+                  />
+                </div>
+                <button
+                  className="mt-3 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+                  onClick={submitPresidentProject}
+                >
+                  <Plus className="h-4 w-4" /> Create Project
+                </button>
               </>
             )}
           </section>

@@ -100,18 +100,10 @@ const Header = () => {
             )
           }
           {
-            userData?.role === "welfareOfficer" && (
+            (userData?.role === "welfareOfficer" || userData?.role === "dean" || userData?.role === "president") && (
               <Link to="/admin" className={navLink("/admin")}>
                 Dashboard
                 {isActive("/admin") && <span className="nav-link-active-bar" />}
-              </Link>
-            )
-          }
-          {
-            userData?.role === "dean" && (
-              <Link to="/workspace" className={navLink("/workspace")}>
-                Manage Organizations
-                {isActive("/workspace") && <span className="nav-link-active-bar" />}
               </Link>
             )
           }

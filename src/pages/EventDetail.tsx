@@ -1,4 +1,4 @@
-﻿import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
@@ -30,6 +30,7 @@ type WorkflowDetailItem = {
   decision: string;
   comment: string;
   at?: string | null;
+  actor?: { fullName?: string; email?: string; role?: string } | null;
 };
 
 type WorkflowEventDetailResponse = {
@@ -45,9 +46,22 @@ type WorkflowEventDetailResponse = {
     coverImageUrl: string;
     classroomName?: string;
     status: string;
+    approvalStage?: string;
+    approvalRole?: string;
   };
   workflow: {
+    status?: string;
+    currentStage?: string;
+    currentRole?: string;
     history: WorkflowDetailItem[];
+    requiresSecurity?: boolean;
+    securityImageUrl?: string;
+    securitySubmittedAt?: string | null;
+    returnedToPresidentAt?: string | null;
+    finalApprovedAt?: string | null;
+  };
+  relations?: {
+    president?: { fullName?: string; email?: string; role?: string } | null;
   };
 };
 
@@ -69,9 +83,17 @@ const EventDetail = () => {
 
   const [eventData, setEventData] = useState<EventData | null>(null);
   const [workflowItems, setWorkflowItems] = useState<WorkflowItem[]>([]);
+  const [workflowCurrentRole, setWorkflowCurrentRole] = useState<string | null>(null);
+  const [workflowCurrentStage, setWorkflowCurrentStage] = useState<string | null>(null);
+  const [workflowStatusStr, setWorkflowStatusStr] = useState<string | null>(null);
+  const [isPresidentOfEvent, setIsPresidentOfEvent] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmittingResponse, setIsSubmittingResponse] = useState(false);
   const [organizerResponseMessage, setOrganizerResponseMessage] = useState("");
+  const [workflowRequiresSecurity, setWorkflowRequiresSecurity] = useState<boolean>(false);
+  const [workflowSecurityImageUrl, setWorkflowSecurityImageUrl] = useState<string | null>(null);
+  const [isUploadingSecurity, setIsUploadingSecurity] = useState<boolean>(false);
+  const securityInputRef = useRef<HTMLInputElement | null>(null);
 
   const fetchEventAndWorkflow = useCallback(async () => {
     if (!id) {
@@ -109,6 +131,9 @@ const EventDetail = () => {
         classRoomName: payload.event.classroomName || "",
       });
 
+      setWorkflowRequiresSecurity(Boolean(payload.workflow?.requiresSecurity));
+      setWorkflowSecurityImageUrl(payload.workflow?.securityImageUrl || null);
+
       setWorkflowItems(
         Array.isArray(payload.workflow?.history)
           ? payload.workflow.history.map((item, index) => ({
@@ -120,6 +145,14 @@ const EventDetail = () => {
             }))
           : []
       );
+      // set current workflow stage/role/status for pending display
+      setWorkflowCurrentRole(payload.workflow?.currentRole || payload.event.approvalRole || null);
+      setWorkflowCurrentStage(payload.workflow?.currentStage || payload.event.approvalStage || null);
+      setWorkflowStatusStr(payload.workflow?.status || payload.event.status || null);
+      // determine if current user is the president for this event
+      const currUserEmail = userData?.email;
+      const presidentEmail = payload.relations?.president?.email || null;
+      setIsPresidentOfEvent(Boolean(currUserEmail && presidentEmail && currUserEmail === presidentEmail));
     } catch (error: any) {
       toast.error(error?.message || "Failed to load event details.");
       setEventData(null);
@@ -193,6 +226,40 @@ const EventDetail = () => {
     }
   };
 
+  const openSecurityPicker = () => securityInputRef.current?.click();
+
+  const handleSecurityFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !id) return toast.error('No file selected');
+
+    try {
+      setIsUploadingSecurity(true);
+      const form = new FormData();
+      form.append('file', file);
+      form.append('upload_preset', 'event-registration');
+
+      const cloudResp = await axios.post('https://api.cloudinary.com/v1_1/dadxdprtg/image/upload', form, { withCredentials: false });
+      const imageUrl = cloudResp?.data?.secure_url;
+      if (!imageUrl) throw new Error('Cloud upload failed');
+
+      axios.defaults.withCredentials = true;
+      const resp = await axios.post(`${backendUrl}/api/workflow/security-upload`, { eventId: id, imageUrl });
+      if (!resp.data?.success) {
+        throw new Error(resp.data?.message || 'Upload failed');
+      }
+
+      toast.success('Security image uploaded');
+      setWorkflowSecurityImageUrl(imageUrl);
+      setWorkflowRequiresSecurity(false);
+      await fetchEventAndWorkflow();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || error?.message || 'Security upload failed');
+    } finally {
+      setIsUploadingSecurity(false);
+      if (securityInputRef.current) securityInputRef.current.value = '';
+    }
+  };
+
   return (
     <MainLayout title="Event Detail" subtitle="Real-time event and approval workflow details">
       <div className="mx-auto w-full max-w-6xl px-5 pb-16 pt-2">
@@ -214,7 +281,11 @@ const EventDetail = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
                   <p className="inline-flex rounded-full border border-white/40 bg-white/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em]">
-                    {eventData.isApproved ? "Fully Completed Event" : "Pending Approval"}
+                    {eventData.isApproved
+                      ? "Fully Completed Event"
+                      : (workflowStatusStr === 'pending' || workflowStatus === 'Pending')
+                        ? `Pending — ${workflowCurrentRole ? formatRole(workflowCurrentRole) : 'Awaiting reviewer'}`
+                        : "Pending Approval"}
                   </p>
                   <h1 className="mt-2 text-3xl font-semibold">{eventData.eventTitle}</h1>
                   <p className="mt-2 max-w-3xl text-sm text-white/90">{eventData.description}</p>
@@ -238,6 +309,13 @@ const EventDetail = () => {
                 </div>
 
                 <div className="mt-6 space-y-3">
+                  {workflowCurrentStage && (((userData?.role === 'president') && isPresidentOfEvent) || userData?.role !== 'president') && (
+                    <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                      <p className="text-xs text-slate-500">Current approval stage</p>
+                      <p className="mt-1 font-semibold text-slate-800">{formatRole(workflowCurrentStage)}</p>
+                      <p className="mt-1 text-xs text-slate-500">Assigned role: <span className="font-medium text-slate-700">{workflowCurrentRole ? formatRole(workflowCurrentRole) : '-'}</span></p>
+                    </div>
+                  )}
                   {workflowItems.length === 0 && (
                     <p className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">No workflow records found for this event.</p>
                   )}
@@ -336,6 +414,25 @@ const EventDetail = () => {
                 <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <h2 className="text-lg font-semibold text-slate-900">Quick links</h2>
                   <div className="mt-4 space-y-2">
+                      <input ref={securityInputRef} type="file" accept=".png, .jpg, .jpeg" className="hidden" onChange={handleSecurityFileChange} />
+                      {userData?.role === 'president' && isPresidentOfEvent && workflowRequiresSecurity && !workflowSecurityImageUrl && (
+                        <button
+                          type="button"
+                          onClick={openSecurityPicker}
+                          disabled={isUploadingSecurity}
+                          className="inline-flex w-full justify-center rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 mb-2"
+                        >
+                          {isUploadingSecurity ? 'Uploading...' : 'Upload security image'}
+                        </button>
+                      )}
+                      {workflowSecurityImageUrl && (
+                        <div className="mb-2">
+                          <p className="text-xs text-slate-500">Security proof</p>
+                          <a href={workflowSecurityImageUrl} target="_blank" rel="noreferrer" className="inline-block mt-2">
+                            <img src={workflowSecurityImageUrl} alt="Security proof" className="w-full max-w-xs rounded-lg border" />
+                          </a>
+                        </div>
+                      )}
                     {canOpenEditMode ? (
                       <Link to={`/event-edit/${eventData._id}`} className="inline-flex w-full justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
                         Open event edit mode

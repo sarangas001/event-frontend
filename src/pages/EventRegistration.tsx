@@ -87,8 +87,10 @@ const EventRegistration = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [venues, setVenues] = useState<any[]>([]);
+  const [faculties, setFaculties] = useState<any[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [loadingVenues, setLoadingVenues] = useState(true);
+  const [loadingFaculties, setLoadingFaculties] = useState(true);
   const [uploadingImage, setUploadingImage] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -105,6 +107,8 @@ const EventRegistration = () => {
     imageLink: "",
     venue: "",
     venueId: "",
+    facultyId: "",
+    facultyName: "",
     classRoomName: "",
     documents: [] as File[],
   });
@@ -144,11 +148,38 @@ const EventRegistration = () => {
       }
     };
 
+    const loadFaculties = async () => {
+      try {
+        setLoadingFaculties(true);
+        axios.defaults.withCredentials = true;
+        const { data } = await axios.get(`${backendUrl}/api/faculty/get-all`);
+        if (data?.success) {
+          setFaculties(Array.isArray(data.message) ? data.message : []);
+        } else {
+          toast.error(data?.message || "Unable to load faculties.");
+        }
+      } catch (error: any) {
+        toast.error(error?.response?.data?.message || error?.message || "Unable to load faculties.");
+      } finally {
+        setLoadingFaculties(false);
+      }
+    };
+
     if (userData?.role === "president") {
       loadProjects();
       loadVenues();
+      loadFaculties();
     }
   }, [backendUrl, userData?.role]);
+
+  const selectedVenue = venues.find((venue) => venue._id === formData.venueId);
+  const requiresFacultySelection = Boolean(
+    selectedVenue && (
+      String(selectedVenue.type || "").toLowerCase().includes("faculty") ||
+      String(selectedVenue.ownerType || "").toLowerCase() === "dean"
+    )
+  );
+  const showClassroomInput = requiresFacultySelection && Boolean(formData.facultyId);
 
   const validateCurrentStep = () => {
     if (currentStep === 1) {
@@ -164,14 +195,10 @@ const EventRegistration = () => {
 
     if (currentStep === 2) {
       if (!formData.venue.trim()) return "Please select a venue.";
-      const selectedVenue = venues.find((venue) => venue._id === formData.venueId);
-      const requiresClassroom = Boolean(
-        selectedVenue && (
-          String(selectedVenue.type || "").toLowerCase().includes("faculty") ||
-          String(selectedVenue.ownerType || "").toLowerCase() === "dean"
-        )
-      );
-      if (requiresClassroom && !formData.classRoomName.trim()) {
+      if (requiresFacultySelection && !formData.facultyId) {
+        return "Please select a faculty.";
+      }
+      if (showClassroomInput && !formData.classRoomName.trim()) {
         return "Please enter the classroom name.";
       }
     }
@@ -207,6 +234,7 @@ const EventRegistration = () => {
           startTime: formData.startTime,
           endTime: formData.endTime,
           venueId: formData.venueId,
+          facultyId: formData.facultyId,
           venueName: formData.venue,
           coverImageUrl: formData.imageLink,
           classroomName: formData.classRoomName,
@@ -394,11 +422,15 @@ const EventRegistration = () => {
                 <select value={formData.venueId}
                   onChange={(e) => {
                     const selectedVenue = venues.find((venue) => venue._id === e.target.value);
+                    const venueFacultyId = selectedVenue?.faculty?._id || selectedVenue?.faculty || "";
+                    const matchedFaculty = faculties.find((faculty) => faculty._id === String(venueFacultyId));
                     setFormData({
                       ...formData,
                       venueId: e.target.value,
                       venue: selectedVenue?.venueName || selectedVenue?.name || "",
-                      classRoomName: selectedVenue && String(selectedVenue.type || "").toLowerCase().includes("faculty") ? formData.classRoomName : formData.classRoomName,
+                      facultyId: venueFacultyId ? String(venueFacultyId) : "",
+                      facultyName: matchedFaculty?.facultyName || "",
+                      classRoomName: "",
                     });
                   }}
                   className="form-input appearance-none pr-10 cursor-pointer">
@@ -416,17 +448,38 @@ const EventRegistration = () => {
               </div>
             </div>
 
-            {(() => {
-              const selectedVenue = venues.find((venue) => venue._id === formData.venueId);
-              const requiresClassroom = Boolean(
-                selectedVenue && (
-                  String(selectedVenue.type || "").toLowerCase().includes("faculty") ||
-                  String(selectedVenue.ownerType || "").toLowerCase() === "dean"
-                )
-              );
+            {requiresFacultySelection && (
+              <div className="fade-in">
+                <label className="field-label">Faculty <span className="text-red-400">*</span></label>
+                <div className="relative">
+                  <select
+                    value={formData.facultyId}
+                    onChange={(e) => {
+                      const matchedFaculty = faculties.find((faculty) => faculty._id === e.target.value);
+                      setFormData({
+                        ...formData,
+                        facultyId: e.target.value,
+                        facultyName: matchedFaculty?.facultyName || "",
+                        classRoomName: "",
+                      });
+                    }}
+                    className="form-input appearance-none pr-10 cursor-pointer"
+                  >
+                    <option value="">{loadingFaculties ? "Loading faculties..." : "Select a faculty"}</option>
+                    {!loadingFaculties && faculties.map((faculty) => (
+                      <option key={faculty._id} value={faculty._id}>
+                        {faculty.facultyName}
+                      </option>
+                    ))}
+                  </select>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none">
+                    <path d="M6 9l6 6 6-6"/>
+                  </svg>
+                </div>
+              </div>
+            )}
 
-              return requiresClassroom;
-            })() && (
+            {showClassroomInput && (
               <div className="fade-in">
                 <label className="field-label">Classroom Name <span className="text-red-400">*</span></label>
                 <input type="text" placeholder="Enter classroom name"
@@ -561,6 +614,7 @@ const EventRegistration = () => {
                 <ReviewRow label="Start Time"  value={formData.startTime}    />
                 <ReviewRow label="End Time"    value={formData.endTime}      />
                 <ReviewRow label="Venue"       value={formData.venue}        />
+                {formData.facultyName && <ReviewRow label="Faculty" value={formData.facultyName} />}
                 {formData.classRoomName && <ReviewRow label="Classroom" value={formData.classRoomName} />}
                 <ReviewRow label="Attendees"   value={formData.expectedAttendees > 0 ? String(formData.expectedAttendees) : ""} />
               </div>

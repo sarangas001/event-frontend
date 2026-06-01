@@ -38,7 +38,7 @@ const Workspace = () => {
 
   const role = userData?.role || "student";
   const canApprove = ["advisor", "dean", "welfareOfficer", "sportsDirector", "chairmanOfArt", "proctor", "viceChancellor"].includes(role);
-  const canCreateProject = role === "advisor" || role === "dean";
+  const canCreateProject = role === "president";
   const canCreateEvent = role === "president";
 
   const [activeTab, setActiveTab] = useState<"queue" | "project" | "events" | "security" | "timeline">("queue");
@@ -54,9 +54,6 @@ const Workspace = () => {
     organizationId: "",
     projectName: "",
     description: "",
-    presidentName: "",
-    presidentEmail: "",
-    presidentPassword: "",
   });
   const [eventForm, setEventForm] = useState({
     projectId: "",
@@ -157,9 +154,6 @@ const Workspace = () => {
       organizationId: "",
       projectName: "",
       description: "",
-      presidentName: "",
-      presidentEmail: "",
-      presidentPassword: "",
     });
     loadData();
   };
@@ -339,7 +333,7 @@ const Workspace = () => {
 
             {activeTab === "project" && canCreateProject && (
               <section className="bg-white border rounded-2xl p-5 grid md:grid-cols-2 gap-3">
-                <h3 className="md:col-span-2 font-semibold text-slate-800">Step 0: Create Project + President</h3>
+                <h3 className="md:col-span-2 font-semibold text-slate-800">Step 0: Create Project</h3>
                 <select
                   className="border rounded-xl p-2.5 text-sm"
                   value={projectForm.organizationId}
@@ -354,9 +348,6 @@ const Workspace = () => {
                 </select>
                 <input placeholder="Project Name" className="border rounded-xl p-2.5 text-sm" value={projectForm.projectName} onChange={(e) => setProjectForm((s) => ({ ...s, projectName: e.target.value }))} />
                 <textarea placeholder="Description" className="md:col-span-2 border rounded-xl p-2.5 text-sm" value={projectForm.description} onChange={(e) => setProjectForm((s) => ({ ...s, description: e.target.value }))} />
-                <input placeholder="President Name" className="border rounded-xl p-2.5 text-sm" value={projectForm.presidentName} onChange={(e) => setProjectForm((s) => ({ ...s, presidentName: e.target.value }))} />
-                <input placeholder="President Email" className="border rounded-xl p-2.5 text-sm" value={projectForm.presidentEmail} onChange={(e) => setProjectForm((s) => ({ ...s, presidentEmail: e.target.value }))} />
-                <input placeholder="President Password" className="md:col-span-2 border rounded-xl p-2.5 text-sm" value={projectForm.presidentPassword} onChange={(e) => setProjectForm((s) => ({ ...s, presidentPassword: e.target.value }))} />
                 <div className="md:col-span-2"><button onClick={createProject} className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm"><Send className="w-4 h-4 inline mr-1" />Create Project</button></div>
               </section>
             )}
@@ -381,7 +372,7 @@ const Workspace = () => {
                   </div>
                   {projects.length === 0 && (
                     <p className="mt-3 text-xs text-amber-600">
-                      No assigned project found for this president. Ask your advisor/dean to create your project first.
+                      No project found yet. Create your project first, then continue with event registration.
                     </p>
                   )}
                 </div>
