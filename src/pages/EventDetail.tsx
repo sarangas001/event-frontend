@@ -1,4 +1,4 @@
-﻿import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
@@ -30,6 +30,7 @@ type WorkflowDetailItem = {
   decision: string;
   comment: string;
   at?: string | null;
+  actor?: { fullName?: string; email?: string; role?: string } | null;
 };
 
 type WorkflowEventDetailResponse = {
@@ -53,6 +54,11 @@ type WorkflowEventDetailResponse = {
     currentStage?: string;
     currentRole?: string;
     history: WorkflowDetailItem[];
+    requiresSecurity?: boolean;
+    securityImageUrl?: string;
+    securitySubmittedAt?: string | null;
+    returnedToPresidentAt?: string | null;
+    finalApprovedAt?: string | null;
   };
   relations?: {
     president?: { fullName?: string; email?: string; role?: string } | null;
@@ -84,6 +90,10 @@ const EventDetail = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmittingResponse, setIsSubmittingResponse] = useState(false);
   const [organizerResponseMessage, setOrganizerResponseMessage] = useState("");
+  const [workflowRequiresSecurity, setWorkflowRequiresSecurity] = useState<boolean>(false);
+  const [workflowSecurityImageUrl, setWorkflowSecurityImageUrl] = useState<string | null>(null);
+  const [isUploadingSecurity, setIsUploadingSecurity] = useState<boolean>(false);
+  const securityInputRef = useRef<HTMLInputElement | null>(null);
 
   const fetchEventAndWorkflow = useCallback(async () => {
     if (!id) {
@@ -120,6 +130,9 @@ const EventDetail = () => {
         organizationId: "",
         classRoomName: payload.event.classroomName || "",
       });
+
+      setWorkflowRequiresSecurity(Boolean(payload.workflow?.requiresSecurity));
+      setWorkflowSecurityImageUrl(payload.workflow?.securityImageUrl || null);
 
       setWorkflowItems(
         Array.isArray(payload.workflow?.history)
@@ -210,6 +223,40 @@ const EventDetail = () => {
       toast.error(error?.message || "Failed to submit workflow update.");
     } finally {
       setIsSubmittingResponse(false);
+    }
+  };
+
+  const openSecurityPicker = () => securityInputRef.current?.click();
+
+  const handleSecurityFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !id) return toast.error('No file selected');
+
+    try {
+      setIsUploadingSecurity(true);
+      const form = new FormData();
+      form.append('file', file);
+      form.append('upload_preset', 'event-registration');
+
+      const cloudResp = await axios.post('https://api.cloudinary.com/v1_1/dadxdprtg/image/upload', form, { withCredentials: false });
+      const imageUrl = cloudResp?.data?.secure_url;
+      if (!imageUrl) throw new Error('Cloud upload failed');
+
+      axios.defaults.withCredentials = true;
+      const resp = await axios.post(`${backendUrl}/api/workflow/security-upload`, { eventId: id, imageUrl });
+      if (!resp.data?.success) {
+        throw new Error(resp.data?.message || 'Upload failed');
+      }
+
+      toast.success('Security image uploaded');
+      setWorkflowSecurityImageUrl(imageUrl);
+      setWorkflowRequiresSecurity(false);
+      await fetchEventAndWorkflow();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || error?.message || 'Security upload failed');
+    } finally {
+      setIsUploadingSecurity(false);
+      if (securityInputRef.current) securityInputRef.current.value = '';
     }
   };
 
@@ -367,6 +414,25 @@ const EventDetail = () => {
                 <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
                   <h2 className="text-lg font-semibold text-slate-900">Quick links</h2>
                   <div className="mt-4 space-y-2">
+                      <input ref={securityInputRef} type="file" accept=".png, .jpg, .jpeg" className="hidden" onChange={handleSecurityFileChange} />
+                      {userData?.role === 'president' && isPresidentOfEvent && workflowRequiresSecurity && !workflowSecurityImageUrl && (
+                        <button
+                          type="button"
+                          onClick={openSecurityPicker}
+                          disabled={isUploadingSecurity}
+                          className="inline-flex w-full justify-center rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 mb-2"
+                        >
+                          {isUploadingSecurity ? 'Uploading...' : 'Upload security image'}
+                        </button>
+                      )}
+                      {workflowSecurityImageUrl && (
+                        <div className="mb-2">
+                          <p className="text-xs text-slate-500">Security proof</p>
+                          <a href={workflowSecurityImageUrl} target="_blank" rel="noreferrer" className="inline-block mt-2">
+                            <img src={workflowSecurityImageUrl} alt="Security proof" className="w-full max-w-xs rounded-lg border" />
+                          </a>
+                        </div>
+                      )}
                     {canOpenEditMode ? (
                       <Link to={`/event-edit/${eventData._id}`} className="inline-flex w-full justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700">
                         Open event edit mode
