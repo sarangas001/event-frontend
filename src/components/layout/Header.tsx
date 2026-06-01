@@ -1,5 +1,13 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { LogOut, User } from "lucide-react";
+import { LogOut, User, Menu, X } from "lucide-react";
+import {
+  Drawer,
+  DrawerTrigger,
+  DrawerContent,
+  DrawerHeader,
+  DrawerClose,
+  DrawerFooter,
+} from "@/components/ui/drawer";
 import { useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AppContext } from "@/context/AppContext";
@@ -117,6 +125,75 @@ const Header = () => {
           }
         </nav>
 
+        {/* Mobile: hamburger trigger -> drawer menu */}
+        <div className="flex sm:hidden items-center">
+          <Drawer>
+            <DrawerTrigger asChild>
+              <button
+                aria-label="Open menu"
+                className="p-2 rounded-lg text-slate-700 hover:bg-slate-100"
+              >
+                <Menu size={18} />
+              </button>
+            </DrawerTrigger>
+
+            <DrawerContent>
+              <DrawerHeader>
+                <div className="w-full flex items-center justify-between">
+                  <Link to="/" className="flex items-center gap-2.5">
+                    <div className="logo-badge w-7 h-7 rounded-lg flex items-center justify-center text-white">
+                      <IconSparkle />
+                    </div>
+                    <span className="font-display text-slate-800 text-base font-medium">Eventraze</span>
+                  </Link>
+                  <DrawerClose asChild>
+                    <button aria-label="Close menu" className="p-2">
+                      <X size={18} />
+                    </button>
+                  </DrawerClose>
+                </div>
+              </DrawerHeader>
+
+              <div className="flex flex-col gap-2 p-4">
+                <Link to="/" className={navLink("/")}>Home</Link>
+                <Link to="/events" className={navLink("/events")}>Events</Link>
+                {userData?.role === "president" && (
+                  <Link to="/my-events" className={navLink("/my-events")}>My Events</Link>
+                )}
+                {userData?.role === "welfareOfficer" && (
+                  <Link to="/admin" className={navLink("/admin")}>Dashboard</Link>
+                )}
+                {userData?.role === "dean" && (
+                  <Link to="/workspace" className={navLink("/workspace")}>Manage Organizations</Link>
+                )}
+                {userData && userData?.role != "president" && (
+                  <Link to="/approval-dashboard" className={navLink("/approval-dashboard")}>Event Workflow</Link>
+                )}
+              </div>
+
+              <DrawerFooter>
+                {userData?.name ? (
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-50 to-sky-50 flex items-center justify-center">
+                      <span className="text-sm font-bold text-blue-600">{initials}</span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">{userData.name}</div>
+                      <div className="text-xs text-slate-500">{userData.email}</div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="mt-3">
+                  <button onClick={() => navigate('/profile')} className="w-full text-left text-sm px-3 py-2 rounded-md hover:bg-slate-100">Profile</button>
+                  <form onSubmit={handleLogout}>
+                    <button type="submit" className="mt-2 w-full text-left text-sm px-3 py-2 rounded-md text-red-600 hover:bg-slate-100">Logout</button>
+                  </form>
+                </div>
+              </DrawerFooter>
+            </DrawerContent>
+          </Drawer>
+        </div>
         {userData?.role ? (
           <div className="flex items-center gap-2.5 shrink-0">
             {userData?.name && (
