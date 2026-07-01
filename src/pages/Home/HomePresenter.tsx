@@ -3,6 +3,7 @@ import crowdBg from "@/assets/crowd-bg.jpg";
 import Footer from "@/components/layout/Footer";
 import Header from "@/components/layout/Header";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from "@/components/ui/carousel";
 import FeaturesSection from "@/components/ui/FeaturesSection";
 import CategoriesSection from "@/components/ui/CategoriesSection";
 import HowItWorksSection from "@/components/ui/HowItWorksSection";
@@ -27,6 +28,8 @@ type HomePresenterProps = {
   heroParticles: HeroParticle[];
   heroStats: HeroStat[];
   onRetryEvents: () => void;
+  onPreviousMonth: () => void;
+  onNextMonth: () => void;
 };
 
 const Arrow = () => <span aria-hidden="true">-&gt;</span>;
@@ -96,6 +99,8 @@ const HomePresenter = ({
   heroParticles,
   heroStats,
   onRetryEvents,
+  onPreviousMonth,
+  onNextMonth,
 }: HomePresenterProps) => {
   return (
     <div className="min-h-screen bg-slate-50">
@@ -124,9 +129,9 @@ const HomePresenter = ({
 
             <aside className="rounded-2xl border border-white/20 bg-white/10 p-4 backdrop-blur" aria-label="Event date calendar">
               <div className="mb-3 flex items-center justify-between">
-                <button type="button" aria-label="Previous month" className="rounded border border-white/25 px-2 py-1 text-xs">‹</button>
+                <button type="button" onClick={onPreviousMonth} aria-label="Previous month" className="rounded border border-white/25 px-2 py-1 text-xs">‹</button>
                 <p className="font-semibold">{monthYearLabel}</p>
-                <button type="button" aria-label="Next month" className="rounded border border-white/25 px-2 py-1 text-xs">›</button>
+                <button type="button" onClick={onNextMonth} aria-label="Next month" className="rounded border border-white/25 px-2 py-1 text-xs">›</button>
               </div>
               <div className="mb-1 grid grid-cols-7 text-center text-xs text-white/70">
                 {['Mo','Tu','We','Th','Fr','Sa','Su'].map((d) => <div key={d}>{d}</div>)}
@@ -137,8 +142,8 @@ const HomePresenter = ({
                 ))}
               </div>
               <div className="mt-4 space-y-2">
-                {featuredDates.map((date) => (
-                  <div key={date.date} className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm">
+                {featuredDates.map((date, index) => (
+                  <div key={`${date.date}-${date.name}-${index}`} className="rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm">
                     <span className="text-blue-300">{date.date}</span> {date.name}
                   </div>
                 ))}
@@ -157,38 +162,56 @@ const HomePresenter = ({
         </section>
 
         <section className="mx-auto max-w-6xl px-6 py-14" aria-labelledby="upcoming-events-title" aria-busy={isEventsLoading}>
-          <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.12em] text-blue-600">What&apos;s on</p>
-              <h2 id="upcoming-events-title" className="text-3xl font-semibold text-slate-900">Upcoming campus events</h2>
-            </div>
-            <Link to="/events" className="text-sm font-semibold text-blue-600">View all</Link>
-          </div>
-
-          {isEventsLoading && <p role="status" className="rounded-xl border bg-white p-6 text-sm text-slate-500">Loading events...</p>}
-
-          {!isEventsLoading && upcomingEvents.length === 0 && (
-            <div className="rounded-xl border bg-white p-6 text-center">
-              <p className="text-sm text-slate-500">No events available right now.</p>
-              <button type="button" onClick={onRetryEvents} className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-600" aria-label="Retry loading events">Retry</button>
-            </div>
-          )}
-
-          {!isEventsLoading && upcomingEvents.length > 0 && (
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {upcomingEvents.map((event) => (
-                <Link key={event.id} to={`/event/${event.id}`} className="overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:-translate-y-1" aria-label={`Open event ${event.title}`}>
-                  <img src={event.image} alt={event.title} className="h-48 w-full object-cover" />
-                  <div className="p-4">
-                    <p className="text-xs uppercase tracking-[0.1em] text-blue-600">{event.category}</p>
-                    <h3 className="mt-1 text-lg font-semibold text-slate-900">{event.title}</h3>
-                    <p className="mt-2 line-clamp-2 text-sm text-slate-600">{event.description}</p>
-                    <p className="mt-3 text-sm font-semibold text-blue-600">Learn more <Arrow /></p>
+          <Carousel
+            opts={{
+              align: "start",
+              loop: true,
+            }}
+            className="w-full"
+          >
+            <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.12em] text-blue-600">What&apos;s on</p>
+                <h2 id="upcoming-events-title" className="text-3xl font-semibold text-slate-900">Upcoming campus events</h2>
+              </div>
+              <div className="flex items-center gap-4">
+                <Link to="/events" className="text-sm font-semibold text-blue-600 mr-2">View all</Link>
+                {!isEventsLoading && upcomingEvents.length > 0 && (
+                  <div className="flex gap-2">
+                    <CarouselPrevious className="static translate-y-0 left-0 right-0 h-9 w-9 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-800 transition-colors" />
+                    <CarouselNext className="static translate-y-0 left-0 right-0 h-9 w-9 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-800 transition-colors" />
                   </div>
-                </Link>
-              ))}
+                )}
+              </div>
             </div>
-          )}
+
+            {isEventsLoading && <p role="status" className="rounded-xl border bg-white p-6 text-sm text-slate-500">Loading events...</p>}
+
+            {!isEventsLoading && upcomingEvents.length === 0 && (
+              <div className="rounded-xl border bg-white p-6 text-center">
+                <p className="text-sm text-slate-500">No events available right now.</p>
+                <button type="button" onClick={onRetryEvents} className="mt-3 rounded-md bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-600" aria-label="Retry loading events">Retry</button>
+              </div>
+            )}
+
+            {!isEventsLoading && upcomingEvents.length > 0 && (
+              <CarouselContent className="-ml-5">
+                {upcomingEvents.map((event) => (
+                  <CarouselItem key={event.id} className="pl-5 sm:basis-1/2 lg:basis-1/3">
+                    <Link to={`/event/${event.id}`} className="block overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:-translate-y-1 h-full" aria-label={`Open event ${event.title}`}>
+                      <img src={event.image} alt={event.title} className="h-48 w-full object-cover" />
+                      <div className="p-4">
+                        <p className="text-xs uppercase tracking-[0.1em] text-blue-600">{event.category}</p>
+                        <h3 className="mt-1 text-lg font-semibold text-slate-900">{event.title}</h3>
+                        <p className="mt-2 line-clamp-2 text-sm text-slate-600">{event.description}</p>
+                        <p className="mt-3 text-sm font-semibold text-blue-600">Learn more <Arrow /></p>
+                      </div>
+                    </Link>
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+            )}
+          </Carousel>
         </section>
 
         {/* <FeaturesSection /> */}

@@ -59,3 +59,31 @@ export const formatTime = (value?: string | null) => {
     hour12: true,
   }).format(date);
 };
+
+export const isEventExpired = (eventDateStr: string, endTimeStr?: string) => {
+  if (!eventDateStr) return true;
+
+  const dateParts = eventDateStr.split("-");
+  if (dateParts.length !== 3) {
+    const parsedDate = new Date(eventDateStr);
+    return isNaN(parsedDate.getTime()) ? true : parsedDate < new Date();
+  }
+
+  const year = parseInt(dateParts[0], 10);
+  const month = parseInt(dateParts[1], 10) - 1;
+  const day = parseInt(dateParts[2], 10);
+
+  let hours = 23;
+  let minutes = 59;
+
+  if (endTimeStr) {
+    const timeParts = endTimeStr.split(":");
+    if (timeParts.length >= 2) {
+      hours = parseInt(timeParts[0], 10);
+      minutes = parseInt(timeParts[1], 10);
+    }
+  }
+
+  const eventEndDate = new Date(year, month, day, hours, minutes, 59, 999);
+  return eventEndDate < new Date();
+};
