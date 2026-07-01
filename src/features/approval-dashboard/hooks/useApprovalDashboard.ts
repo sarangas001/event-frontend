@@ -26,6 +26,9 @@ export const useApprovalDashboard = ({ backendUrl, isStudent, onLoggedOut }: Use
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
 
+  const queueMode: "pending" | "history" =
+    activeNav === "history" || activeNav === "completed" ? "history" : "pending";
+
   const statusCounts = useMemo(
     () => ({
       pending: events.filter((event) => event.status === "Pending").length,
@@ -36,11 +39,11 @@ export const useApprovalDashboard = ({ backendUrl, isStudent, onLoggedOut }: Use
     [events],
   );
 
-  const fetchWorkflowQueue = useCallback(async () => {
+  const fetchWorkflowQueue = useCallback(async (mode: "pending" | "history" = queueMode) => {
     try {
       setIsLoadingData(true);
 
-      const data = await approvalDashboardApi.fetchQueue(backendUrl);
+      const data = await approvalDashboardApi.fetchQueue(backendUrl, mode);
       if (!data?.success) {
         toast.error("Failed to fetch approval queue.");
         setEvents([]);
@@ -114,7 +117,10 @@ export const useApprovalDashboard = ({ backendUrl, isStudent, onLoggedOut }: Use
       });
 
       setEvents(mappedEvents);
-      setSelectedEvent(mappedEvents[0] || null);
+      setSelectedEvent((previous) => {
+        if (!previous) return mappedEvents[0] || null;
+        return mappedEvents.find((event) => event.id === previous.id) || mappedEvents[0] || null;
+      });
     } catch (error: any) {
       toast.error(error?.message || "Failed to fetch approval queue.");
       setEvents([]);
@@ -122,7 +128,7 @@ export const useApprovalDashboard = ({ backendUrl, isStudent, onLoggedOut }: Use
     } finally {
       setIsLoadingData(false);
     }
-  }, [backendUrl]);
+  }, [backendUrl, queueMode]);
 
   const getUserProfile = useCallback(async () => {
     try {
@@ -145,9 +151,28 @@ export const useApprovalDashboard = ({ backendUrl, isStudent, onLoggedOut }: Use
       return;
     }
 
-    fetchWorkflowQueue();
+    fetchWorkflowQueue(queueMode);
     getUserProfile();
-  }, [fetchWorkflowQueue, getUserProfile, isStudent, navigate]);
+  }, [fetchWorkflowQueue, getUserProfile, isStudent, navigate, queueMode]);
+
+  useEffect(() => {
+    if (isStudent) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      fetchWorkflowQueue(queueMode);
+    }, 15000);
+
+    const onFocus = () => {
+      fetchWorkflowQueue(queueMode);
+    };
+
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [fetchWorkflowQueue, isStudent, queueMode]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -188,24 +213,23 @@ export const useApprovalDashboard = ({ backendUrl, isStudent, onLoggedOut }: Use
 
         toast.success(status === "approved" ? "Workflow approved." : "Workflow rejected.");
         setComment("");
-        await fetchWorkflowQueue();
+        await fetchWorkflowQueue(queueMode);
       } catch (error: any) {
         toast.error(error?.message || "Failed to update workflow.");
       }
     },
-    [backendUrl, comment, fetchWorkflowQueue, selectedEvent],
+    [backendUrl, comment, fetchWorkflowQueue, selectedEvent, queueMode],
   );
 
   const openEventDetailPage = useCallback((eventId: string) => navigate(`/approval-dashboard/event/${eventId}`), [navigate]);
 
   const filteredEvents = useMemo(
     () => {
-      // If viewing history, show events where current user's role appears in workflowContent
+      // History mode is server-filtered; still keep search term filtering client-side.
       if (activeNav === "history") {
         return events.filter((event) => {
-          const hasRole = Array.isArray(event.workflowContent) && event.workflowContent.some((item) => formatRole(item.role) === role);
           const matchSearch = event.title.toLowerCase().includes(searchQuery.toLowerCase()) || event.organizer.toLowerCase().includes(searchQuery.toLowerCase());
-          return hasRole && matchSearch;
+          return matchSearch;
         });
       }
 
@@ -216,7 +240,7 @@ export const useApprovalDashboard = ({ backendUrl, isStudent, onLoggedOut }: Use
         return matchSearch && matchStatus;
       });
     },
-    [events, searchQuery, statusFilter, activeNav, role],
+    [events, searchQuery, statusFilter, activeNav],
   );
 
   return {
