@@ -3,8 +3,10 @@ import apiClient from "@/services/apiClient";
 import type { UserProfile } from "../types";
 
 export const approvalDashboardApi = {
-  async fetchQueue(backendUrl: string) {
-    const { data } = await apiClient.get(`${backendUrl}/api/workflow/queue`);
+  async fetchQueue(backendUrl: string, mode: "pending" | "history" = "pending") {
+    const { data } = await apiClient.get(`${backendUrl}/api/workflow/queue`, {
+      params: { mode },
+    });
     return data as { success?: boolean; message?: unknown };
   },
 

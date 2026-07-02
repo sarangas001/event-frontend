@@ -166,8 +166,21 @@ const EventDetail = () => {
     fetchEventAndWorkflow();
   }, [fetchEventAndWorkflow]);
 
-  const approvedCount = useMemo(() => workflowItems.filter((item) => item.status === "approved").length, [workflowItems]);
-  const progress = workflowItems.length > 0 ? Math.round((approvedCount / workflowItems.length) * 100) : 0;
+  const progress = useMemo(() => {
+    if (workflowStatusStr === "approved" || eventData?.isApproved) {
+      return 100;
+    }
+
+    if (workflowItems.length === 0) {
+      return 0;
+    }
+
+    const completedCount = workflowItems.filter((item) =>
+      ["approved", "submitted", "uploaded"].includes(String(item.status).toLowerCase())
+    ).length;
+
+    return Math.round((completedCount / workflowItems.length) * 100);
+  }, [eventData?.isApproved, workflowItems, workflowStatusStr]);
 
   const workflowStatus = useMemo(() => {
     if (eventData?.isApproved === true) return "Fully Completed";

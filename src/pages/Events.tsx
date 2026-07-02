@@ -4,6 +4,7 @@ import MainLayout from "@/components/layout/MainLayout";
 import axios from "axios";
 import { AppContext } from "@/context/AppContext";
 import { toast } from "@/components/ui/sonner";
+import { isEventExpired } from "@/lib/formatters";
 
 /* ─────────────────────────────────────────
    ICONS
@@ -251,7 +252,43 @@ const Events = () => {
     const matchesCategory =
       !selectedCategory ||
       event.category.toLowerCase() === selectedCategory.toLowerCase();
-    return matchesSearch && matchesCategory;
+
+    const matchesDate = (() => {
+      if (!selectedDate) return true;
+
+      const eventDateParts = event.date.split("-");
+      if (eventDateParts.length !== 3) return true;
+
+      const year = parseInt(eventDateParts[0], 10);
+      const month = parseInt(eventDateParts[1], 10) - 1;
+      const day = parseInt(eventDateParts[2], 10);
+      const eventDate = new Date(year, month, day);
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      if (selectedDate === "today") {
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        return event.date === todayStr;
+      }
+
+      if (selectedDate === "week") {
+        const nextWeek = new Date(today);
+        nextWeek.setDate(today.getDate() + 7);
+        nextWeek.setHours(23, 59, 59, 999);
+        return eventDate >= today && eventDate <= nextWeek;
+      }
+
+      if (selectedDate === "month") {
+        return year === today.getFullYear() && month === today.getMonth();
+      }
+
+      return true;
+    })();
+
+    const isExpired = isEventExpired(event.date, event.endTime);
+
+    return matchesSearch && matchesCategory && matchesDate && !isExpired;
   });
 
   /* Data fetching (unchanged) */
@@ -268,6 +305,8 @@ const Events = () => {
           location: event.venue,
           category: event.category.charAt(0).toUpperCase() + event.category.slice(1),
           status:   "Approved",
+          startTime: event.startTime,
+          endTime:  event.endTime,
         }));
         setAllEvents(formattedEvents);
       } else {
