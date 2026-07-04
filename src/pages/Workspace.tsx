@@ -23,6 +23,7 @@ const stageLabel: Record<string, string> = {
   venueOwner: "Venue Owner",
   categoryCheck: "Category Check",
   securityUpload: "Security Upload",
+  finalOrganizationAuthority: "Final Organization Authority",
   proctor: "Proctor",
   viceChancellor: "Vice Chancellor",
   welfareFinal: "Welfare Final",
